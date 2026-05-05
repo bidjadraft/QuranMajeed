@@ -69,6 +69,43 @@
                 <div><label>إلى الآية</label><select id="endAyah"></select></div>
             </div>
 
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label>حجم النص العربي</label>
+                    <select id="arabicFontSizeSelect">
+                        <option value="50">صغير (50)</option>
+                        <option value="60">متوسط (60)</option>
+                        <option value="70" selected>عادي (70)</option>
+                        <option value="80">كبير (80)</option>
+                        <option value="90">كبير جداً (90)</option>
+                    </select>
+                </div>
+                <div>
+                    <label>حجم نص الترجمة</label>
+                    <select id="transFontSizeSelect">
+                        <option value="25">صغير جداً (25)</option>
+                        <option value="30">صغير (30)</option>
+                        <option value="35">متوسط (35)</option>
+                        <option value="45" selected>عادي (45)</option>
+                        <option value="55">كبير (55)</option>
+                        <option value="65">كبير جداً (65)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label>اللغة</label>
+                <select id="translationLang">
+                    <option value="en.sahih">الإنجليزية</option>
+                    <option value="fr.hamidullah">الفرنسية</option>
+                    <option value="es.cortes">الإسبانية</option>
+                    <option value="pt.elhayek">البرتغالية</option>
+                    <option value="de.aburida">الألمانية</option>
+                    <option value="tr.diyanet">التركية</option>
+                    <option value="ru.kuliev">الروسية</option>
+                </select>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
                 <div class="toggle-container">
                     <span class="text-xs">إظهار الترجمة</span>
@@ -141,6 +178,9 @@
         const startSelect = document.getElementById('startAyah');
         const endSelect = document.getElementById('endAyah');
         const reciterSelect = document.getElementById('reciterSelect');
+        const translationLang = document.getElementById('translationLang');
+        const transFontSizeSelect = document.getElementById('transFontSizeSelect');
+        const arabicFontSizeSelect = document.getElementById('arabicFontSizeSelect');
         const ratioItems = document.querySelectorAll('.ratio-item');
         const mergeBtn = document.getElementById('mergeBtn');
         const changeBgBtn = document.getElementById('changeBgBtn');
@@ -157,7 +197,7 @@
         
         let audioCtx, timestamps = [], mediaRecorder, recordedChunks = [], 
             currentAyahText = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ", 
-            currentTranslation = "In the name of Allah, the Entirely Merciful, the Especially Merciful.",
+            currentTranslation = "",
             currentAyahNumber = 1, currentSurahName = "الفاتحة", currentReciterName = "", finalBlob = null, 
             bgImage = null, currentRatio = "9/16", overlayOpacity = 0.8;
 
@@ -170,6 +210,7 @@
         };
 
         async function init() {
+            reciterSelect.innerHTML = '';
             reciters.forEach(r => {
                 const opt = document.createElement('option');
                 opt.value = r.id; opt.textContent = r.name;
@@ -177,6 +218,7 @@
             });
             const res = await fetch('https://api.alquran.cloud/v1/surah');
             const data = await res.json();
+            surahSelect.innerHTML = '';
             data.data.forEach(s => {
                 const opt = document.createElement('option');
                 opt.value = s.number; opt.textContent = `${s.number}. ${s.name}`; opt.dataset.max = s.numberOfAyahs;
@@ -188,6 +230,9 @@
             surahSelect.onchange = () => { updateAyahLists(); fetchPreviewAyah(startSelect.value); };
             startSelect.onchange = () => { handleStartChange(); fetchPreviewAyah(startSelect.value); };
             endSelect.onchange = () => { fetchPreviewAyah(endSelect.value); };
+            translationLang.onchange = () => { fetchPreviewAyah(startSelect.value); };
+            transFontSizeSelect.onchange = () => { fetchPreviewAyah(startSelect.value); };
+            arabicFontSizeSelect.onchange = () => { fetchPreviewAyah(startSelect.value); };
             reciterSelect.onchange = () => { currentReciterName = reciterSelect.selectedOptions[0].textContent; };
             
             currentReciterName = reciterSelect.selectedOptions[0].textContent;
@@ -199,6 +244,7 @@
                     item.classList.add('active');
                     currentRatio = item.dataset.ratio;
                     updateCanvasSize();
+                    fetchPreviewAyah(startSelect.value);
                 };
             });
 
@@ -208,6 +254,7 @@
             };
 
             updateCanvasSize();
+            fetchPreviewAyah(1);
             drawLoop();
         }
 
@@ -215,9 +262,10 @@
             if (!surahSelect.value || !aNum) return;
             try {
                 const sNum = surahSelect.value;
+                const lang = translationLang.value;
                 const [tRes, eRes] = await Promise.all([
                     fetch(`https://api.alquran.cloud/v1/ayah/${sNum}:${aNum}`),
-                    fetch(`https://api.alquran.cloud/v1/ayah/${sNum}:${aNum}/en.sahih`)
+                    fetch(`https://api.alquran.cloud/v1/ayah/${sNum}:${aNum}/${lang}`)
                 ]);
                 const tData = await tRes.json();
                 const eData = await eRes.json();
@@ -290,6 +338,9 @@
             startSelect.disabled = isLoading;
             endSelect.disabled = isLoading;
             reciterSelect.disabled = isLoading;
+            translationLang.disabled = isLoading;
+            transFontSizeSelect.disabled = isLoading;
+            arabicFontSizeSelect.disabled = isLoading;
             showTranslationCheck.disabled = isLoading;
             showSurahNameCheck.disabled = isLoading;
             useFadeCheck.disabled = isLoading;
@@ -321,8 +372,12 @@
             ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
             ctx.shadowBlur = 10;
 
-            const arabicFontSize = canvas.width < 1100 ? 60 : 70;
-            const transFontSize = canvas.width < 1100 ? 30 : 45;
+            const userArabicSize = parseInt(arabicFontSizeSelect.value);
+            const arabicFontSize = canvas.width < 1100 ? userArabicSize * 0.85 : userArabicSize;
+            
+            const userTransFontSize = parseInt(transFontSizeSelect.value);
+            const transFontSize = canvas.width < 1100 ? userTransFontSize * 0.8 : userTransFontSize;
+            
             const maxWidth = canvas.width * 0.85;
             
             let symbol = ayahNum ? "۝" + toArabicDigits(ayahNum) : "";
@@ -332,7 +387,7 @@
             const words = fullText.split(' ');
             let arabicLines = [], currLine = '';
             
-            words.forEach((w, idx) => {
+            words.forEach((w) => {
                 let test = currLine + (currLine ? ' ' : '') + w;
                 if(ctx.measureText(test).width > maxWidth) { 
                     arabicLines.push(currLine); 
@@ -459,20 +514,27 @@
 
         mergeBtn.onclick = async () => {
             try {
+                if (mediaRecorder && mediaRecorder.state !== "inactive") return;
+                
                 downloadVideo.classList.add('hidden');
                 finalBlob = null;
                 setBtnState("جاري التحميل...", true);
-                if (audioCtx) await audioCtx.close();
+                
+                if (audioCtx) {
+                    await audioCtx.close().catch(() => {});
+                }
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
                 const surahNum = surahSelect.value;
                 const start = parseInt(startSelect.value);
                 const end = parseInt(endSelect.value);
                 const reciter = reciterSelect.value;
+                const lang = translationLang.value;
                 currentReciterName = reciterSelect.selectedOptions[0].textContent;
 
                 const [tRes, eRes] = await Promise.all([
                     fetch(`https://api.alquran.cloud/v1/surah/${surahNum}`),
-                    fetch(`https://api.alquran.cloud/v1/surah/${surahNum}/en.sahih`)
+                    fetch(`https://api.alquran.cloud/v1/surah/${surahNum}/${lang}`)
                 ]);
                 
                 const tData = await tRes.json();
@@ -521,21 +583,26 @@
             const source = audioCtx.createMediaElementSource(audioElement);
             source.connect(audioDest);
             source.connect(audioCtx.destination);
+            
             const combined = new MediaStream([...stream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
             mediaRecorder = new MediaRecorder(combined, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 });
             recordedChunks = [];
+            
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
             mediaRecorder.onstop = () => {
                 finalBlob = new Blob(recordedChunks, { type: 'video/webm' });
                 downloadVideo.classList.remove('hidden');
-                setBtnState("تم الانجاز", false);
+                setBtnState("توليد الكروما", false);
+                audioElement.pause();
+                audioElement.src = "";
             };
+            
             mediaRecorder.start();
             audioElement.play();
             
             let lastAyah = null;
             const sync = () => {
-                if (mediaRecorder.state !== "recording") return;
+                if (!mediaRecorder || mediaRecorder.state !== "recording") return;
                 const ct = audioElement.currentTime;
                 
                 const active = timestamps.find(t => ct >= (t.start - 0.4) && ct < (t.end - 0.4));
@@ -556,7 +623,9 @@
                     }
                 }
                 if(!audioElement.ended) requestAnimationFrame(sync);
-                else mediaRecorder.stop();
+                else {
+                    if (mediaRecorder.state === "recording") mediaRecorder.stop();
+                }
             };
             sync();
         }

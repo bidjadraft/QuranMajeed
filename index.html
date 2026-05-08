@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -611,18 +610,12 @@
             source.connect(audioCtx.destination);
             
             const combined = new MediaStream([...stream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
-            
-            let mimeType = 'video/mp4';
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = 'video/webm;codecs=vp9';
-            }
-            
-            mediaRecorder = new MediaRecorder(combined, { mimeType: mimeType, videoBitsPerSecond: 8000000 });
+            mediaRecorder = new MediaRecorder(combined, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 });
             recordedChunks = [];
             
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
             mediaRecorder.onstop = () => {
-                finalBlob = new Blob(recordedChunks, { type: mimeType });
+                finalBlob = new Blob(recordedChunks, { type: 'video/webm' });
                 downloadVideo.classList.remove('hidden');
                 setBtnState("توليد الكروما", false);
                 audioElement.pause();
@@ -709,10 +702,7 @@
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                
-                const extension = finalBlob.type.includes('mp4') ? 'mp4' : 'webm';
-                a.download = `Chroma_${Date.now()}.${extension}`;
-                
+                a.download = `Chroma_${Date.now()}.webm`;
                 document.body.appendChild(a);
                 a.click();
                 setTimeout(() => {

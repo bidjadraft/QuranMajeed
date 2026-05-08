@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -94,26 +93,17 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                    <label>لغة الترجمة</label>
-                    <select id="translationLang">
-                        <option value="en.sahih">الإنجليزية</option>
-                        <option value="fr.hamidullah">الفرنسية</option>
-                        <option value="es.cortes">الإسبانية</option>
-                        <option value="pt.elhayek">البرتغالية</option>
-                        <option value="de.aburida">الألمانية</option>
-                        <option value="tr.diyanet">التركية</option>
-                        <option value="ru.kuliev">الروسية</option>
-                    </select>
-                </div>
-                <div>
-                    <label>صيغة التصدير</label>
-                    <select id="exportFormat">
-                        <option value="mp4" selected>MP4 (متوافق)</option>
-                        <option value="webm">WebM (أصلي)</option>
-                    </select>
-                </div>
+            <div class="mb-4">
+                <label>لغة الترجمة</label>
+                <select id="translationLang">
+                    <option value="en.sahih">الإنجليزية</option>
+                    <option value="fr.hamidullah">الفرنسية</option>
+                    <option value="es.cortes">الإسبانية</option>
+                    <option value="pt.elhayek">البرتغالية</option>
+                    <option value="de.aburida">الألمانية</option>
+                    <option value="tr.diyanet">التركية</option>
+                    <option value="ru.kuliev">الروسية</option>
+                </select>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
@@ -193,7 +183,6 @@
         const endSelect = document.getElementById('endAyah');
         const reciterSelect = document.getElementById('reciterSelect');
         const translationLang = document.getElementById('translationLang');
-        const exportFormat = document.getElementById('exportFormat');
         const transFontSizeSelect = document.getElementById('transFontSizeSelect');
         const arabicFontSizeSelect = document.getElementById('arabicFontSizeSelect');
         const ratioItems = document.querySelectorAll('.ratio-item');
@@ -359,7 +348,6 @@
             endSelect.disabled = isLoading;
             reciterSelect.disabled = isLoading;
             translationLang.disabled = isLoading;
-            exportFormat.disabled = isLoading;
             transFontSizeSelect.disabled = isLoading;
             arabicFontSizeSelect.disabled = isLoading;
             showTranslationCheck.disabled = isLoading;
@@ -720,13 +708,12 @@
 
         downloadVideo.onclick = () => {
             if (!finalBlob) return;
-            const format = exportFormat.value;
             try {
                 const url = window.URL.createObjectURL(finalBlob);
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                a.download = `Chroma_${Date.now()}.${format}`;
+                a.download = `Chroma_${Date.now()}.webm`;
                 document.body.appendChild(a);
                 a.click();
                 setTimeout(() => {

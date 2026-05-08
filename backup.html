@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>صانع الكرومات</title>
+    <title>صانع الكرومات الاحترافي</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -106,7 +106,7 @@
                 </select>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
                 <div class="toggle-container">
                     <span class="text-xs">إظهار الترجمة</span>
                     <label class="switch"><input type="checkbox" id="showTranslation" checked><span class="slider"></span></label>
@@ -118,6 +118,10 @@
                 <div class="toggle-container">
                     <span class="text-xs">تأثير الانتقال الناعم</span>
                     <label class="switch"><input type="checkbox" id="useFade" checked><span class="slider"></span></label>
+                </div>
+                <div class="toggle-container">
+                    <span class="text-xs">تحريك الكاميرا (بانوراما)</span>
+                    <label class="switch"><input type="checkbox" id="usePanorama" checked><span class="slider"></span></label>
                 </div>
             </div>
 
@@ -194,12 +198,16 @@
         const showTranslationCheck = document.getElementById('showTranslation');
         const showSurahNameCheck = document.getElementById('showSurahName');
         const useFadeCheck = document.getElementById('useFade');
+        const usePanoramaCheck = document.getElementById('usePanorama');
         
         let audioCtx, timestamps = [], mediaRecorder, recordedChunks = [], 
             currentAyahText = "بِسْمِ اللَّهِ الرَّحْمَنِ الرَّحِيمِ", 
             currentTranslation = "",
             currentAyahNumber = 1, currentSurahName = "الفاتحة", currentReciterName = "", finalBlob = null, 
             bgImage = null, currentRatio = "9/16", overlayOpacity = 0.8;
+
+        let panoramaStartTime = null;
+        const panoramaCycleTime = 120000;
 
         let fadeState = {
             oldText: "",
@@ -255,7 +263,7 @@
 
             updateCanvasSize();
             fetchPreviewAyah(1);
-            drawLoop();
+            requestAnimationFrame(drawLoop);
         }
 
         async function fetchPreviewAyah(aNum) {
@@ -297,11 +305,12 @@
             finalBlob = null;
             const img = new Image();
             img.crossOrigin = "anonymous";
-            img.src = `https://picsum.photos/${canvas.width}/${canvas.height}?nature,religious&sig=${Math.random()}`;
+            img.src = `https://picsum.photos/${canvas.width + 500}/${canvas.height}?nature,religious&sig=${Math.random()}`;
             changeBgBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
             img.onload = () => {
                 bgImage = img;
                 changeBgBtn.innerHTML = '<i class="fas fa-image"></i> تغيير الخلفية';
+                panoramaStartTime = null;
             };
         };
 
@@ -344,6 +353,7 @@
             showTranslationCheck.disabled = isLoading;
             showSurahNameCheck.disabled = isLoading;
             useFadeCheck.disabled = isLoading;
+            usePanoramaCheck.disabled = isLoading;
 
             ratioItems.forEach(item => {
                 if (isLoading) item.classList.add('disabled');
@@ -436,14 +446,29 @@
             ctx.restore();
         }
 
-        function drawLoop() {
+        function drawLoop(timestamp) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             if (bgImage) {
-                const scale = Math.max(canvas.width / bgImage.width, canvas.height / bgImage.height);
-                const x = (canvas.width / 2) - (bgImage.width / 2) * scale;
-                const y = (canvas.height / 2) - (bgImage.height / 2) * scale;
-                ctx.drawImage(bgImage, x, y, bgImage.width * scale, bgImage.height * scale);
+                const baseScale = Math.max(canvas.width / bgImage.width, canvas.height / bgImage.height);
+                const drawScale = usePanoramaCheck.checked ? baseScale * 1.3 : baseScale;
+                
+                const imgW = bgImage.width * drawScale;
+                const imgH = bgImage.height * drawScale;
+                
+                let offsetX = (canvas.width - imgW) / 2;
+                let offsetY = (canvas.height - imgH) / 2;
+
+                if (usePanoramaCheck.checked) {
+                    if (!panoramaStartTime) panoramaStartTime = timestamp;
+                    const elapsed = (timestamp - panoramaStartTime) % panoramaCycleTime;
+                    const progress = elapsed / panoramaCycleTime;
+                    const osc = (Math.sin(progress * 2 * Math.PI - Math.PI / 2) + 1) / 2;
+                    const maxMove = (imgW - canvas.width);
+                    offsetX = -(maxMove * osc);
+                }
+
+                ctx.drawImage(bgImage, offsetX, offsetY, imgW, imgH);
                 ctx.fillStyle = `rgba(0, 0, 0, ${overlayOpacity})`;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             } else {
@@ -523,7 +548,10 @@
                 if (audioCtx) {
                     await audioCtx.close().catch(() => {});
                 }
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 44100
+                });
                 
                 const surahNum = surahSelect.value;
                 const start = parseInt(startSelect.value);
@@ -579,18 +607,37 @@
         function startRecording(audioElement) {
             setBtnState("جاري التسجيل...", true);
             const stream = canvas.captureStream(30);
+            
             const audioDest = audioCtx.createMediaStreamDestination();
             const source = audioCtx.createMediaElementSource(audioElement);
             source.connect(audioDest);
             source.connect(audioCtx.destination);
             
-            const combined = new MediaStream([...stream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
-            mediaRecorder = new MediaRecorder(combined, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 });
+            const combined = new MediaStream([
+                ...stream.getVideoTracks(), 
+                ...audioDest.stream.getAudioTracks()
+            ]);
+
+            const tiktokCompatibleMimes = [
+                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+                'video/mp4;codecs=h264,aac',
+                'video/webm;codecs=vp8,pcm',
+                'video/webm;codecs=vp9,opus'
+            ];
+
+            let supportedMime = tiktokCompatibleMimes.find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+
+            mediaRecorder = new MediaRecorder(combined, { 
+                mimeType: supportedMime,
+                videoBitsPerSecond: 15000000,
+                audioBitsPerSecond: 256000
+            });
+
             recordedChunks = [];
             
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
             mediaRecorder.onstop = () => {
-                finalBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                finalBlob = new Blob(recordedChunks, { type: supportedMime.split(';')[0] });
                 downloadVideo.classList.remove('hidden');
                 setBtnState("توليد الكروما", false);
                 audioElement.pause();
@@ -677,7 +724,9 @@
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                a.download = `Chroma_${Date.now()}.webm`;
+                const isMp4 = finalBlob.type.includes('mp4');
+                const extension = isMp4 ? 'mp4' : 'webm';
+                a.download = `TikTok_Quran_${Date.now()}.${extension}`;
                 document.body.appendChild(a);
                 a.click();
                 setTimeout(() => {
@@ -691,4 +740,4 @@
         init();
     </script>
 </body>
-  </html>
+</html>

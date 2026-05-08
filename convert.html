@@ -75,11 +75,17 @@
             color: #0f0;
             font-family: monospace;
             font-size: 11px;
-            max-height: 150px;
+            max-height: 200px;
             overflow-y: auto;
             direction: ltr;
             text-align: left;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
+        #output .log-info { color: #0f0; }
+        #output .log-warn { color: #ff0; }
+        #output .log-error { color: #f00; }
+        #output .log-success { color: #0ff; }
     </style>
 </head>
 <body>
@@ -122,113 +128,212 @@
 
         let selectedFile = null;
         let ffmpeg = null;
+        let ffmpegLoaded = false;
 
-        const log = (message) => {
-            output.innerHTML += message + '
-';
+        // دالة السجل - تعرض كل شيء في المربع الأسود
+        const log = (message, type = 'info') => {
+            const timestamp = new Date().toLocaleTimeString('ar-DZ');
+            const colorClass = `log-${type}`;
+            output.innerHTML += `<span class="${colorClass}">[${timestamp}] ${message}</span>
+`;
             output.scrollTop = output.scrollHeight;
+            console.log(`[${type.toUpperCase()}]`, message);
         };
 
-        // تحميل ffmpeg عند البدء
+        // بداية البرنامج
+        log('🚀 بدء البرنامج...', 'info');
+        status.innerHTML = '<span class="spinner">⏳</span> جاري تحميل ffmpeg.wasm... هذا قد يستغرق دقيقة (25 ميجابايت)';
+        log('جاري تحميل مكتبة ffmpeg.wasm من CDN...', 'info');
+
+        // تحميل ffmpeg
         async function loadFFmpeg() {
-            status.innerHTML = '<span class="spinner">⏳</span> جاري تحميل ffmpeg.wasm لأول مرة... (قد يستغرق دقيقة)';
-            convertBtn.disabled = true;
-            
-            ffmpeg = createFFmpeg({ 
-                log: true,
-                logger: ({ message }) => log(message)
-            });
-            
             try {
+                log('إنشاء مثيل ffmpeg...', 'info');
+                ffmpeg = createFFmpeg({ 
+                    log: true,
+                    logger: (data) => {
+                        if (data.message) {
+                            log(data.message, 'info');
+                        }
+                    },
+                    corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js'
+                });
+                log('جاري تحميل ffmpeg في الذاكرة...', 'info');
+                
                 await ffmpeg.load();
-                status.innerHTML = '✅ ffmpeg جاهز! اختر ملفًا للتحويل';
-                convertBtn.disabled = false;
+                ffmpegLoaded = true;
+                log('✅ ffmpeg تم تحميله بنجاح!', 'success');
+                log(`الحالة: ffmpeg.isLoaded() = ${ffmpeg.isLoaded()}`, 'success');
+                
+                status.innerHTML = '✅ ffmpeg جاهز! اضغط على المربع لاختيار ملف WebM';
+                
+                // تفعيل زر التحويل إذا كان ملف محدد مسبقًا
+                if (selectedFile) {
+                    convertBtn.disabled = false;
+                    log('زر التحويل مُفعّل لأن هناك ملف مختار', 'success');
+                }
+                
             } catch (error) {
-                status.innerHTML = `❌ خطأ في تحميل ffmpeg: ${error.message}`;
-                log('Error: ' + error.message);
+                log('❌ خطأ في تحميل ffmpeg: ' + error.message, 'error');
+                status.innerHTML = `❌ فشل تحميل ffmpeg<br><small>${error.message}</small>`;
+                console.error('FFmpeg load error:', error);
             }
         }
 
+        // ابدأ التحميل فورًا
         loadFFmpeg();
 
+        // عند اختيار ملف
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files[0]) {
-                selectedFile = e.target.files[0];
-                fileName.textContent = selectedFile.name;
-                fileSize.textContent = `الحجم: ${(selectedFile.size / 1024 / 1024).toFixed(2)} ميجابايت`;
-                fileInfo.style.display = 'block';
-                uploadBox.style.display = 'none';
-                
-                if (ffmpeg && ffmpeg.isLoaded()) {
-                    convertBtn.disabled = false;
-                }
-                status.innerHTML = '✅ ملف جاهز للتحويل';
+            log(`Event triggered: fileInput onchange`, 'info');
+            
+            if (!e.target.files || e.target.files.length === 0) {
+                log('❌ لا توجد ملفات مختارة', 'error');
+                return;
             }
+            
+            selectedFile = e.target.files[0];
+            log(`ملف مختار: ${selectedFile.name}`, 'success');
+            log(`نوع الملف: ${selectedFile.type || 'unknown'}`, 'info');
+            log(`الحجم: ${(selectedFile.size / 1024 / 1024).toFixed(2)} ميجابايت`, 'info');
+            log(`LastModified: ${new Date(selectedFile.lastModified).toISOString()}`, 'info');
+            
+            fileName.textContent = selectedFile.name;
+            fileSize.textContent = `الحجم: ${(selectedFile.size / 1024 / 1024).toFixed(2)} ميجابايت`;
+            fileInfo.style.display = 'block';
+            uploadBox.style.display = 'none';
+            
+            // التحقق من نوع الملف
+            if (!selectedFile.name.toLowerCase().endsWith('.webm')) {
+                log('⚠️ تحذير: الملف ليس بامتداد .webm', 'warn');
+            }
+            
+            // تفعيل زر التحويل إذا كان ffmpeg جاهزًا
+            if (ffmpegLoaded && ffmpeg && ffmpeg.isLoaded()) {
+                convertBtn.disabled = false;
+                log('✅ ffmpeg جاهز + ملف مختار → زر التحويل مُفعّل', 'success');
+            } else {
+                log('⚠️ ffmpeg غير جاهز بعد، الزر سيبقى معطلًا', 'warn');
+                if (ffmpeg) {
+                    log(`ffmpeg.isLoaded() = ${ffmpeg.isLoaded()}', 'info');
+                }
+            }
+            
+            status.innerHTML = '✅ ملف جاهز! اضغط "تحويل إلى MP4"';
         });
 
+        // عند الضغط على زر التحويل
         convertBtn.addEventListener('click', async () => {
-            if (!selectedFile || !ffmpeg || !ffmpeg.isLoaded()) return;
+            log('=' .repeat(50), 'info');
+            log('🎬 بدأ عملية التحويل...', 'info');
+            log('=' .repeat(50), 'info');
+            
+            if (!selectedFile) {
+                log('❌ خطأ: لا يوجد ملف مختار!', 'error');
+                return;
+            }
+            
+            if (!ffmpeg || !ffmpegLoaded || !ffmpeg.isLoaded()) {
+                log('❌ خطأ: ffmpeg غير جاهز!', 'error');
+                if (ffmpeg) {
+                    log(`hhhhhhhhhhhhhhhhhhhhhhhh: ffmpeg.isLoaded() = ${ffmpeg.isLoaded()}', 'error');
+                }
+                return;
+            }
 
             convertBtn.disabled = true;
-            output.innerHTML = '';
-            status.innerHTML = '<span class="spinner">⏳</span> جاري التحويل... يرجى الانتظار';
+            const inputName = 'input.webm';
+            const outputName = 'output.mp4';
 
             try {
-                const inputName = 'input.webm';
-                const outputName = 'output.mp4';
-
-                log('قراءة الملف...');
-                ffmpeg.FS('writeFile', inputName, await fetchFile(selectedFile));
-
-                log('جاري التحويل (webm → mp4)...');
-                log('الترميز: H264 + AAC، جودة صوت عالية');
+                log('خطوة 1/4: قراءة الملف من الذاكرة...', 'info');
+                const fileData = await fetchFile(selectedFile);
+                log(`تم قراءة الملف: ${fileData.byteLength} بايت`, 'success');
                 
-                // التحويل بنفس إعدادات ffmpeg التي ذكرتها
+                log('خطوة 2/4: كتابة الملف في نظام ملفات ffmpeg...', 'info');
+                ffmpeg.FS('writeFile', inputName, fileData);
+                log(`تم الكتابة: ${inputName}`, 'success');
+                
+                // التحقق من الملف
+                const stats = ffmpeg.FS('stat', inputName);
+                log(`حجم الملف في ffmpeg: ${stats.size} بايت`, 'info');
+
+                log('خطوة 3/4: جاري التحويل بالإعدادات التالية:', 'info');
+                log('  - فيديو: H264 (libx264) - CRF 23 - preset medium', 'info');
+                log('  - صوت: AAC - 192kbps', 'info');
+                log('  - flags: +faststart (للعمل على الويب)', 'info');
+                
+                status.innerHTML = '<span class="spinner">⏳</span> جاري التحويل... انتظر حتى ينتهي';
+                
                 await ffmpeg.run(
                     '-i', inputName,
-                    '-c:v', 'libx264',      // فيديو H264
+                    '-c:v', 'libx264',
                     '-preset', 'medium',
                     '-crf', '23',
-                    '-c:a', 'aac',          // صوت AAC (بدلاً من libmp3lame للـ MP4)
+                    '-c:a', 'aac',
                     '-b:a', '192k',
                     '-movflags', '+faststart',
                     outputName
                 );
+                
+                log('✅ffmpeg就绪portantlyinucceeded!', 'success');
 
-                log('جاري تجهيز الملف للتحميل...');
+                log('خطوة 4/4: قراءة الملف الناتج...', 'info');
                 const data = ffmpeg.FS('readFile', outputName);
+                log(`تم القراءة: ${data.byteLength} بايت (${(data.byteLength / 1024 / 1024).toFixed(2)} ميجابايت)`, 'success');
 
+                log('جاري إنشاء Blob للتحميل...', 'info');
                 const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
+                log(`Blob Created: ${mp4Blob.size} bytes, type: ${mp4Blob.type}`, 'success');
+                
                 const url = URL.createObjectURL(mp4Blob);
-                const downloadName = selectedFile.name.replace('.webm', '.mp4');
+                log(`URL.createObjectURL(): ${url}`, 'success');
+                
+                const downloadName = selectedFile.name.replace(/.webm$/i, '.mp4');
+                log(`اسم التحميل: ${downloadName}`, 'info');
 
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = downloadName;
                 document.body.appendChild(a);
+                
+                log('ج軌 التحميل...', 'info');
                 a.click();
+                log('✅ تم النقر على عنصر التحميل', 'success');
 
                 setTimeout(() => {
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
+                    log('تم تنظيف الذاكرة (revokeObjectURL)', 'success');
                     
-                    // تنظيف الذاكرة
+                    log('جاري تنظيف ملفات ffmpeg...', 'info');
                     try {
                         ffmpeg.FS('unlink', inputName);
                         ffmpeg.FS('unlink', outputName);
-                    } catch(e) {}
+                        log('تم حذف الملفات المؤقتة', 'success');
+                    } catch(e) {
+                        log(`تحذير: فشل تنظيف بعض الملفات: ${e.message}`, 'warn');
+                    }
                     
-                    status.innerHTML = '✅ <strong>تم التحويل بنجاح!</strong><br>⊗ تم تحميل الملف MP4';
+                    status.innerHTML = '✅ <strong>تم التحويل بنجاح!</strong><br>⊗ تم تحميل <strong>' + downloadName + '</strong>';
                     convertBtn.disabled = false;
+                    
+                    log('=' .repeat(50), 'success');
+                    log('🎉 انتهت العملية بنجاح!', 'success');
+                    log('=' .repeat(50), 'success');
+
                 }, 100);
 
-                log('✅ تم التحويل بنجاح!');
-
             } catch (error) {
-                console.error('Error:', error);
-                log('Error: ' + error.message);
+                log('❌ خطأ في العملية:', 'error');
+                log(`نوع الخطأ: ${error.name || 'unknown'}`, 'error');
+                log(`الرسالة: ${error.message}`, 'error');
+                log(`الStack: ${error.stack || 'N/A'}`, 'error');
+                
                 status.innerHTML = `❌ <strong>خطأ:</strong> ${error.message}`;
                 convertBtn.disabled = false;
+                
+                console.error('Full error:', error);
             }
         });
     </script>

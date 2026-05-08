@@ -94,7 +94,7 @@
             </div>
 
             <div class="mb-4">
-                <label>لغة الترجمة</label>
+                <label>اللغة</label>
                 <select id="translationLang">
                     <option value="en.sahih">الإنجليزية</option>
                     <option value="fr.hamidullah">الفرنسية</option>
@@ -610,24 +610,12 @@
             source.connect(audioCtx.destination);
             
             const combined = new MediaStream([...stream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
-            
-            let mimeType = 'video/webm;codecs=vp9,opus';
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = 'video/webm;codecs=vp8,opus';
-            }
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = 'video/webm';
-            }
-            
-            mediaRecorder = new MediaRecorder(combined, { 
-                mimeType: mimeType, 
-                videoBitsPerSecond: 8000000 
-            });
+            mediaRecorder = new MediaRecorder(combined, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 });
             recordedChunks = [];
             
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
             mediaRecorder.onstop = () => {
-                finalBlob = new Blob(recordedChunks, { type: mimeType });
+                finalBlob = new Blob(recordedChunks, { type: 'video/webm' });
                 downloadVideo.classList.remove('hidden');
                 setBtnState("توليد الكروما", false);
                 audioElement.pause();
@@ -641,6 +629,7 @@
             const sync = () => {
                 if (!mediaRecorder || mediaRecorder.state !== "recording") return;
                 const ct = audioElement.currentTime;
+                
                 const active = timestamps.find(t => ct >= (t.start - 0.4) && ct < (t.end - 0.4));
                 
                 if (active) {

@@ -548,7 +548,10 @@
                 if (audioCtx) {
                     await audioCtx.close().catch(() => {});
                 }
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 44100
+                });
                 
                 const surahNum = surahSelect.value;
                 const start = parseInt(startSelect.value);
@@ -604,18 +607,37 @@
         function startRecording(audioElement) {
             setBtnState("جاري التسجيل...", true);
             const stream = canvas.captureStream(30);
+            
             const audioDest = audioCtx.createMediaStreamDestination();
             const source = audioCtx.createMediaElementSource(audioElement);
             source.connect(audioDest);
             source.connect(audioCtx.destination);
             
-            const combined = new MediaStream([...stream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
-            mediaRecorder = new MediaRecorder(combined, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8000000 });
+            const combined = new MediaStream([
+                ...stream.getVideoTracks(), 
+                ...audioDest.stream.getAudioTracks()
+            ]);
+
+            const tiktokCompatibleMimes = [
+                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+                'video/mp4;codecs=h264,aac',
+                'video/webm;codecs=vp8,pcm',
+                'video/webm;codecs=vp9,opus'
+            ];
+
+            let supportedMime = tiktokCompatibleMimes.find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+
+            mediaRecorder = new MediaRecorder(combined, { 
+                mimeType: supportedMime,
+                videoBitsPerSecond: 15000000,
+                audioBitsPerSecond: 256000
+            });
+
             recordedChunks = [];
             
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
             mediaRecorder.onstop = () => {
-                finalBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                finalBlob = new Blob(recordedChunks, { type: supportedMime.split(';')[0] });
                 downloadVideo.classList.remove('hidden');
                 setBtnState("توليد الكروما", false);
                 audioElement.pause();
@@ -702,7 +724,9 @@
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                a.download = `Chroma_${Date.now()}.webm`;
+                const isMp4 = finalBlob.type.includes('mp4');
+                const extension = isMp4 ? 'mp4' : 'webm';
+                a.download = `TikTok_Quran_${Date.now()}.${extension}`;
                 document.body.appendChild(a);
                 a.click();
                 setTimeout(() => {

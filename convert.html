@@ -26,12 +26,7 @@
             width: 100%;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
         }
-        h1 { 
-            color: #c5a059; 
-            text-align: center; 
-            margin-bottom: 30px; 
-            font-size: 24px;
-        }
+        h1 { color: #c5a059; text-align: center; margin-bottom: 30px; font-size: 24px; }
         .upload-box {
             border: 2px dashed rgba(197, 160, 89, 0.5);
             border-radius: 15px;
@@ -58,19 +53,9 @@
             font-size: 16px;
             margin-top: 10px;
         }
-        .btn:disabled { 
-            opacity: 0.5; 
-            cursor: not-allowed;
-        }
-        .status { 
-            margin-top: 20px; 
-            text-align: center; 
-            color: #fff;
-            font-size: 14px;
-        }
-        input[type="file"] { 
-            display: none; 
-        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status { margin-top: 20px; text-align: center; color: #fff; font-size: 14px; }
+        input[type="file"] { display: none; }
         .file-info {
             background: rgba(197, 160, 89, 0.1);
             border: 1px solid rgba(197, 160, 89, 0.3);
@@ -79,13 +64,21 @@
             margin-bottom: 20px;
             color: #fff;
         }
-        .spinner {
-            display: inline-block;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        .spinner { display: inline-block; animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        #output {
+            background: #000;
+            border: 1px solid rgba(197, 160, 89, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            max-height: 150px;
+            overflow-y: auto;
+            direction: ltr;
+            text-align: left;
         }
     </style>
 </head>
@@ -96,16 +89,10 @@
         <div id="uploadBox" class="upload-box" onclick="document.getElementById('fileInput').click()">
             <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #c5a059;"></i>
             <p style="color: #fff; margin-top: 15px; font-size: 16px;">اضغط لاختيار ملف WebM من الهاتف</p>
-            <p style="color: rgba(255,255,255,0.6); font-size: 12px;">uuid: media/video أو أي مجلد آخر</p>
+            <p style="color: rgba(255,255,255,0.6); font-size: 12px;">سيتم التحويل محليًا بدون سيرفر</p>
         </div>
         
-        <input 
-            type="file" 
-            id="fileInput" 
-            accept=".webm,video/webm" 
-            capture="user"
-            style="accept='video/webm,.webm'"
-        >
+        <input type="file" id="fileInput" accept=".webm,video/webm">
         
         <div id="fileInfo" class="file-info" style="display: none;">
             <p style="margin: 0 0 10px 0; font-size: 13px; color: rgba(255,255,255,0.8);">الملف المختار:</p>
@@ -118,9 +105,12 @@
         </button>
         
         <div id="status" class="status"></div>
+        <div id="output"></div>
     </div>
 
-    <script>
+    <script type="module">
+        import { createFFmpeg, fetchFile } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.7/+esm';
+
         const fileInput = document.getElementById('fileInput');
         const convertBtn = document.getElementById('convertBtn');
         const status = document.getElementById('status');
@@ -128,8 +118,38 @@
         const fileName = document.getElementById('fileName');
         const fileSize = document.getElementById('fileSize');
         const uploadBox = document.getElementById('uploadBox');
-        
+        const output = document.getElementById('output');
+
         let selectedFile = null;
+        let ffmpeg = null;
+
+        const log = (message) => {
+            output.innerHTML += message + '
+';
+            output.scrollTop = output.scrollHeight;
+        };
+
+        // تحميل ffmpeg عند البدء
+        async function loadFFmpeg() {
+            status.innerHTML = '<span class="spinner">⏳</span> جاري تحميل ffmpeg.wasm لأول مرة... (قد يستغرق دقيقة)';
+            convertBtn.disabled = true;
+            
+            ffmpeg = createFFmpeg({ 
+                log: true,
+                logger: ({ message }) => log(message)
+            });
+            
+            try {
+                await ffmpeg.load();
+                status.innerHTML = '✅ ffmpeg جاهز! اختر ملفًا للتحويل';
+                convertBtn.disabled = false;
+            } catch (error) {
+                status.innerHTML = `❌ خطأ في تحميل ffmpeg: ${error.message}`;
+                log('Error: ' + error.message);
+            }
+        }
+
+        loadFFmpeg();
 
         fileInput.addEventListener('change', (e) => {
             if (e.target.files[0]) {
@@ -137,118 +157,78 @@
                 fileName.textContent = selectedFile.name;
                 fileSize.textContent = `الحجم: ${(selectedFile.size / 1024 / 1024).toFixed(2)} ميجابايت`;
                 fileInfo.style.display = 'block';
-                convertBtn.disabled = false;
                 uploadBox.style.display = 'none';
+                
+                if (ffmpeg && ffmpeg.isLoaded()) {
+                    convertBtn.disabled = false;
+                }
                 status.innerHTML = '✅ ملف جاهز للتحويل';
             }
         });
 
         convertBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
+            if (!selectedFile || !ffmpeg || !ffmpeg.isLoaded()) return;
 
             convertBtn.disabled = true;
-            uploadBox.style.pointerEvents = 'none';
+            output.innerHTML = '';
             status.innerHTML = '<span class="spinner">⏳</span> جاري التحويل... يرجى الانتظار';
 
             try {
-                // قراءة الملف كـ ArrayBuffer
-                const arrayBuffer = await selectedFile.arrayBuffer();
-                const blob = new Blob([arrayBuffer], { type: 'video/webm' });
+                const inputName = 'input.webm';
+                const outputName = 'output.mp4';
+
+                log('قراءة الملف...');
+                ffmpeg.FS('writeFile', inputName, await fetchFile(selectedFile));
+
+                log('جاري التحويل (webm → mp4)...');
+                log('الترميز: H264 + AAC، جودة صوت عالية');
                 
-                // إنشاء عنصر فيديو لقراءة الملف
-                const video = document.createElement('video');
-                video.preload = 'metadata';
-                video.muted = true;
-                
-                const videoUrl = URL.createObjectURL(blob);
-                video.src = videoUrl;
-                
-                video.onloadedmetadata = async () => {
-                    status.innerHTML = '<span class="spinner">⏳</span> جاري معالجة الفيديو...';
+                // التحويل بنفس إعدادات ffmpeg التي ذكرتها
+                await ffmpeg.run(
+                    '-i', inputName,
+                    '-c:v', 'libx264',      // فيديو H264
+                    '-preset', 'medium',
+                    '-crf', '23',
+                    '-c:a', 'aac',          // صوت AAC (بدلاً من libmp3lame للـ MP4)
+                    '-b:a', '192k',
+                    '-movflags', '+faststart',
+                    outputName
+                );
+
+                log('جاري تجهيز الملف للتحميل...');
+                const data = ffmpeg.FS('readFile', outputName);
+
+                const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
+                const url = URL.createObjectURL(mp4Blob);
+                const downloadName = selectedFile.name.replace('.webm', '.mp4');
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = downloadName;
+                document.body.appendChild(a);
+                a.click();
+
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
                     
-                    // إنشاء Canvas للتسجيل
-                    const canvas = document.createElement('canvas');
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    const ctx = canvas.getContext('2d');
+                    // تنظيف الذاكرة
+                    try {
+                        ffmpeg.FS('unlink', inputName);
+                        ffmpeg.FS('unlink', outputName);
+                    } catch(e) {}
                     
-                    const stream = canvas.captureStream(30);
-                    
-                    // محاولة استخدام MP4، إذا لم يعمل نستخدم WebM ثم نحول
-                    let mimeType = 'video/mp4';
-                    if (!MediaRecorder.isTypeSupported(mimeType)) {
-                        mimeType = 'video/webm;codecs=vp9';
-                        console.log('MP4 غير مدعوم، استخدام WebM');
-                    }
-                    
-                    const mediaRecorder = new MediaRecorder(stream, {
-                        mimeType: mimeType,
-                        videoBitsPerSecond: 8000000
-                    });
-                    
-                    const chunks = [];
-                    mediaRecorder.ondataavailable = e => {
-                        if (e.data.size > 0) {
-                            chunks.push(e.data);
-                            console.log(`تم استلام تش.biz: ${e.data.size} bytes`);
-                        }
-                    };
-                    
-                    mediaRecorder.onstop = () => {
-                        console.log('تم إيقاف التسجيل، عدد chunks:', chunks.length);
-                        
-                        const finalBlob = new Blob(chunks, { 
-                            type: mimeType === 'video/mp4' ? 'video/mp4' : 'video/webm' 
-                        });
-                        
-                        const url = URL.createObjectURL(finalBlob);
-                        const downloadName = selectedFile.name.replace('.webm', '.mp4');
-                        
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = downloadName;
-                        document.body.appendChild(a);
-                        a.click();
-                        
-                        setTimeout(() => {
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                            
-                            status.innerHTML = '✅ <strong>تم التحويل بنجاح!</strong><br>⊗ تم تحميل الملف';
-                            convertBtn.disabled = false;
-                            uploadBox.style.pointerEvents = 'auto';
-                        }, 100);
-                    };
-                    
-                    // تشغيل الفيديو والتسجيل
-                    mediaRecorder.start(1000); // تسجيل كل ثانية
-                    
-                    video.play();
-                    
-                    video.onended = () => {
-                        console.log('انتهى الفيديو، إيقاف التسجيل');
-                        if (mediaRecorder.state === 'recording') {
-                            mediaRecorder.stop();
-                        }
-                    };
-                    
-                    // Timeout بأمان
-                    setTimeout(() => {
-                        if (mediaRecorder.state === 'recording') {
-                            mediaRecorder.stop();
-                        }
-                    }, video.duration * 1000 + 5000);
-                };
-                
-                video.onerror = (e) => {
-                    throw new Error('فشل تحميل الفيديو: ' + e.message);
-                };
+                    status.innerHTML = '✅ <strong>تم التحويل بنجاح!</strong><br>⊗ تم تحميل الملف MP4';
+                    convertBtn.disabled = false;
+                }, 100);
+
+                log('✅ تم التحويل بنجاح!');
 
             } catch (error) {
-                console.error('خطأ في التحويل:', error);
-                status.innerHTML = `❌ <strong>خطأ:</strong> ${error.message}<br><small style="color: rgba(255,255,255,0.7)">حاول إعادة تحميل الصفحة والمحاولة مجددًا</small>`;
+                console.error('Error:', error);
+                log('Error: ' + error.message);
+                status.innerHTML = `❌ <strong>خطأ:</strong> ${error.message}`;
                 convertBtn.disabled = false;
-                uploadBox.style.pointerEvents = 'auto';
             }
         });
     </script>

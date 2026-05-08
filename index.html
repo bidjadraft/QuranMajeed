@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -43,9 +44,27 @@
         .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--royal-gold); }
         input:checked + .slider:before { transform: translateX(20px); }
+
+        #modalOverlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(8px); }
+        .modal-box { background: #022c22; border: 2px solid var(--royal-gold); border-radius: 24px; padding: 30px; width: 90%; max-width: 420px; text-align: center; }
+        .platform-option { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(197, 160, 89, 0.3); padding: 15px; border-radius: 15px; margin: 12px 0; cursor: pointer; transition: 0.3s; display: flex; align-items: center; justify-content: center; gap: 12px; font-weight: bold; }
+        .platform-option:hover { background: rgba(197, 160, 89, 0.2); border-color: var(--royal-gold); }
     </style>
 </head>
 <body>
+    <div id="modalOverlay">
+        <div class="modal-box">
+            <h2 class="text-xl font-bold mb-4" style="color: var(--royal-gold)">اختر المنصة والترميز</h2>
+            <div class="platform-option" onclick="processWithPlatform('tiktok')">
+                <i class="fab fa-tiktok"></i> تيك توك (MP4)
+            </div>
+            <div class="platform-option" onclick="processWithPlatform('others')">
+                <i class="fab fa-instagram"></i> <i class="fab fa-youtube ml-2"></i> انستغرام / يوتيوب (WebM)
+            </div>
+            <button onclick="closeModal()" class="mt-4 text-xs text-gray-400">إلغاء</button>
+        </div>
+    </div>
+
     <div class="main-wrapper">
         <div class="screen-container">
             <button id="changeBgBtn" class="floating-btn bg-btn">
@@ -194,6 +213,7 @@
         const canvas = document.getElementById('videoCanvas');
         const ctx = canvas.getContext('2d');
         const downloadVideo = document.getElementById('downloadVideo');
+        const modalOverlay = document.getElementById('modalOverlay');
 
         const showTranslationCheck = document.getElementById('showTranslation');
         const showSurahNameCheck = document.getElementById('showSurahName');
@@ -208,6 +228,7 @@
 
         let panoramaStartTime = null;
         const panoramaCycleTime = 120000;
+        let activePlatform = 'others';
 
         let fadeState = {
             oldText: "",
@@ -537,10 +558,20 @@
             throw new Error(`فشل تحميل صوت الآية ${ayah}`);
         }
 
-        mergeBtn.onclick = async () => {
+        mergeBtn.onclick = () => {
+            if (mediaRecorder && mediaRecorder.state !== "inactive") return;
+            modalOverlay.style.display = 'flex';
+        };
+
+        function closeModal() {
+            modalOverlay.style.display = 'none';
+        }
+
+        async function processWithPlatform(platform) {
+            activePlatform = platform;
+            closeModal();
+            
             try {
-                if (mediaRecorder && mediaRecorder.state !== "inactive") return;
-                
                 downloadVideo.classList.add('hidden');
                 finalBlob = null;
                 setBtnState("جاري التحميل...", true);
@@ -602,7 +633,7 @@
                 alert(e.message);
                 setBtnState("توليد الكروما", false);
             }
-        };
+        }
 
         function startRecording(audioElement) {
             setBtnState("جاري التسجيل...", true);
@@ -618,17 +649,17 @@
                 ...audioDest.stream.getAudioTracks()
             ]);
 
-            const tiktokCompatibleMimes = [
-                'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-                'video/mp4;codecs=h264,aac',
-                'video/webm;codecs=vp8,pcm',
-                'video/webm;codecs=vp9,opus'
-            ];
-
-            let supportedMime = tiktokCompatibleMimes.find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+            let mime = activePlatform === 'tiktok' ? 'video/mp4;codecs=avc1.42E01E,mp4a.40.2' : 'video/webm;codecs=vp9,opus';
+            
+            if (!MediaRecorder.isTypeSupported(mime)) {
+                mime = activePlatform === 'tiktok' ? 'video/mp4' : 'video/webm';
+            }
+            if (!MediaRecorder.isTypeSupported(mime)) {
+                mime = 'video/webm';
+            }
 
             mediaRecorder = new MediaRecorder(combined, { 
-                mimeType: supportedMime,
+                mimeType: mime,
                 videoBitsPerSecond: 15000000,
                 audioBitsPerSecond: 256000
             });
@@ -637,9 +668,9 @@
             
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
             mediaRecorder.onstop = () => {
-                finalBlob = new Blob(recordedChunks, { type: supportedMime.split(';')[0] });
-                downloadVideo.classList.remove('hidden');
+                finalBlob = new Blob(recordedChunks, { type: mime.split(';')[0] });
                 setBtnState("توليد الكروما", false);
+                downloadVideo.classList.remove('hidden');
                 audioElement.pause();
                 audioElement.src = "";
             };
@@ -724,9 +755,8 @@
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                const isMp4 = finalBlob.type.includes('mp4');
-                const extension = isMp4 ? 'mp4' : 'webm';
-                a.download = `TikTok_Quran_${Date.now()}.${extension}`;
+                const ext = activePlatform === 'tiktok' ? 'mp4' : 'webm';
+                a.download = `Quran_Video_${Date.now()}.${ext}`;
                 document.body.appendChild(a);
                 a.click();
                 setTimeout(() => {

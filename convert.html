@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>تحويل WebM إلى MP4</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { 
+            font-family: 'Tajawal', 'Amiri', sans-serif;
+            background: linear-gradient(135deg, #022c22 0%, #064e3b 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(197, 160, 89, 0.3);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        h1 { 
+            color: #c5a059; 
+            text-align: center; 
+            margin-bottom: 30px; 
+            font-size: 24px;
+        }
+        .upload-box {
+            border: 2px dashed rgba(197, 160, 89, 0.5);
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        .upload-box:active {
+            border-color: #c5a059;
+            background: rgba(197, 160, 89, 0.1);
+            transform: scale(0.98);
+        }
+        .btn {
+            background: linear-gradient(45deg, #c5a059, #e2c28a);
+            color: #022c22;
+            font-weight: bold;
+            padding: 15px 30px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .btn:disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed;
+        }
+        .status { 
+            margin-top: 20px; 
+            text-align: center; 
+            color: #fff;
+            font-size: 14px;
+        }
+        input[type="file"] { 
+            display: none; 
+        }
+        .file-info {
+            background: rgba(197, 160, 89, 0.1);
+            border: 1px solid rgba(197, 160, 89, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+        .spinner {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 تحويل WebM إلى MP4</h1>
+        
+        <div id="uploadBox" class="upload-box" onclick="document.getElementById('fileInput').click()">
+            <i class="fas fa-cloud-upload-alt" style="font-size: 48px; color: #c5a059;"></i>
+            <p style="color: #fff; margin-top: 15px; font-size: 16px;">اضغط لاختيار ملف WebM من الهاتف</p>
+            <p style="color: rgba(255,255,255,0.6); font-size: 12px;">uuid: media/video أو أي مجلد آخر</p>
+        </div>
+        
+        <input 
+            type="file" 
+            id="fileInput" 
+            accept=".webm,video/webm" 
+            capture="user"
+            style="accept='video/webm,.webm'"
+        >
+        
+        <div id="fileInfo" class="file-info" style="display: none;">
+            <p style="margin: 0 0 10px 0; font-size: 13px; color: rgba(255,255,255,0.8);">الملف المختار:</p>
+            <p id="fileName" style="margin: 0 0 5px 0; font-weight: bold; color: #c5a059;"></p>
+            <p id="fileSize" style="margin: 0; font-size: 12px; color: rgba(255,255,255,0.7);"></p>
+        </div>
+        
+        <button id="convertBtn" class="btn" disabled>
+            <i class="fas fa-sync-alt"></i> تحويل إلى MP4
+        </button>
+        
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const convertBtn = document.getElementById('convertBtn');
+        const status = document.getElementById('status');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const uploadBox = document.getElementById('uploadBox');
+        
+        let selectedFile = null;
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                selectedFile = e.target.files[0];
+                fileName.textContent = selectedFile.name;
+                fileSize.textContent = `الحجم: ${(selectedFile.size / 1024 / 1024).toFixed(2)} ميجابايت`;
+                fileInfo.style.display = 'block';
+                convertBtn.disabled = false;
+                uploadBox.style.display = 'none';
+                status.innerHTML = '✅ ملف جاهز للتحويل';
+            }
+        });
+
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            convertBtn.disabled = true;
+            uploadBox.style.pointerEvents = 'none';
+            status.innerHTML = '<span class="spinner">⏳</span> جاري التحويل... يرجى الانتظار';
+
+            try {
+                // قراءة الملف كـ ArrayBuffer
+                const arrayBuffer = await selectedFile.arrayBuffer();
+                const blob = new Blob([arrayBuffer], { type: 'video/webm' });
+                
+                // إنشاء عنصر فيديو لقراءة الملف
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.muted = true;
+                
+                const videoUrl = URL.createObjectURL(blob);
+                video.src = videoUrl;
+                
+                video.onloadedmetadata = async () => {
+                    status.innerHTML = '<span class="spinner">⏳</span> جاري معالجة الفيديو...';
+                    
+                    // إنشاء Canvas للتسجيل
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    
+                    const stream = canvas.captureStream(30);
+                    
+                    // محاولة استخدام MP4، إذا لم يعمل نستخدم WebM ثم نحول
+                    let mimeType = 'video/mp4';
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {
+                        mimeType = 'video/webm;codecs=vp9';
+                        console.log('MP4 غير مدعوم، استخدام WebM');
+                    }
+                    
+                    const mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: mimeType,
+                        videoBitsPerSecond: 8000000
+                    });
+                    
+                    const chunks = [];
+                    mediaRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) {
+                            chunks.push(e.data);
+                            console.log(`تم استلام تش.biz: ${e.data.size} bytes`);
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        console.log('تم إيقاف التسجيل، عدد chunks:', chunks.length);
+                        
+                        const finalBlob = new Blob(chunks, { 
+                            type: mimeType === 'video/mp4' ? 'video/mp4' : 'video/webm' 
+                        });
+                        
+                        const url = URL.createObjectURL(finalBlob);
+                        const downloadName = selectedFile.name.replace('.webm', '.mp4');
+                        
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = downloadName;
+                        document.body.appendChild(a);
+                        a.click();
+                        
+                        setTimeout(() => {
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            
+                            status.innerHTML = '✅ <strong>تم التحويل بنجاح!</strong><br>⊗ تم تحميل الملف';
+                            convertBtn.disabled = false;
+                            uploadBox.style.pointerEvents = 'auto';
+                        }, 100);
+                    };
+                    
+                    // تشغيل الفيديو والتسجيل
+                    mediaRecorder.start(1000); // تسجيل كل ثانية
+                    
+                    video.play();
+                    
+                    video.onended = () => {
+                        console.log('انتهى الفيديو، إيقاف التسجيل');
+                        if (mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                        }
+                    };
+                    
+                    // Timeout بأمان
+                    setTimeout(() => {
+                        if (mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                        }
+                    }, video.duration * 1000 + 5000);
+                };
+                
+                video.onerror = (e) => {
+                    throw new Error('فشل تحميل الفيديو: ' + e.message);
+                };
+
+            } catch (error) {
+                console.error('خطأ في التحويل:', error);
+                status.innerHTML = `❌ <strong>خطأ:</strong> ${error.message}<br><small style="color: rgba(255,255,255,0.7)">حاول إعادة تحميل الصفحة والمحاولة مجددًا</small>`;
+                convertBtn.disabled = false;
+                uploadBox.style.pointerEvents = 'auto';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -88,27 +88,14 @@
                 <div><label>إلى الآية</label><select id="endAyah"></select></div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                    <label>حجم النص العربي</label>
-                    <select id="arabicFontSizeSelect">
-                        <option value="50">صغير (50)</option>
-                        <option value="60">متوسط (60)</option>
-                        <option value="70" selected>عادي (70)</option>
-                        <option value="80">كبير (80)</option>
-                        <option value="90">كبير جداً (90)</option>
-                    </select>
+                    <label class="flex justify-between">حجم النص العربي <span><span id="arabicFontSizeVal">70</span></span></label>
+                    <input type="range" id="arabicFontSizeSlider" min="20" max="100" value="70">
                 </div>
                 <div>
-                    <label>حجم نص الترجمة</label>
-                    <select id="transFontSizeSelect">
-                        <option value="25">صغير جداً (25)</option>
-                        <option value="30">صغير (30)</option>
-                        <option value="35">متوسط (35)</option>
-                        <option value="45" selected>عادي (45)</option>
-                        <option value="55">كبير (55)</option>
-                        <option value="65">كبير جداً (65)</option>
-                    </select>
+                    <label class="flex justify-between">حجم نص الترجمة <span><span id="transFontSizeVal">45</span></span></label>
+                    <input type="range" id="transFontSizeSlider" min="20" max="100" value="45">
                 </div>
             </div>
 
@@ -202,8 +189,10 @@
         const endSelect = document.getElementById('endAyah');
         const reciterSelect = document.getElementById('reciterSelect');
         const translationLang = document.getElementById('translationLang');
-        const transFontSizeSelect = document.getElementById('transFontSizeSelect');
-        const arabicFontSizeSelect = document.getElementById('arabicFontSizeSelect');
+        const transFontSizeSlider = document.getElementById('transFontSizeSlider');
+        const transFontSizeVal = document.getElementById('transFontSizeVal');
+        const arabicFontSizeSlider = document.getElementById('arabicFontSizeSlider');
+        const arabicFontSizeVal = document.getElementById('arabicFontSizeVal');
         const ratioItems = document.querySelectorAll('.ratio-item');
         const mergeBtn = document.getElementById('mergeBtn');
         const changeBgBtn = document.getElementById('changeBgBtn');
@@ -260,8 +249,16 @@
             startSelect.onchange = () => { handleStartChange(); fetchPreviewAyah(startSelect.value); };
             endSelect.onchange = () => { fetchPreviewAyah(endSelect.value); };
             translationLang.onchange = () => { fetchPreviewAyah(startSelect.value); };
-            transFontSizeSelect.onchange = () => { fetchPreviewAyah(startSelect.value); };
-            arabicFontSizeSelect.onchange = () => { fetchPreviewAyah(startSelect.value); };
+            
+            transFontSizeSlider.oninput = (e) => {
+                transFontSizeVal.textContent = e.target.value;
+                fetchPreviewAyah(startSelect.value);
+            };
+            arabicFontSizeSlider.oninput = (e) => {
+                arabicFontSizeVal.textContent = e.target.value;
+                fetchPreviewAyah(startSelect.value);
+            };
+            
             reciterSelect.onchange = () => { currentReciterName = reciterSelect.selectedOptions[0].textContent; };
             
             currentReciterName = reciterSelect.selectedOptions[0].textContent;
@@ -369,8 +366,8 @@
             endSelect.disabled = isLoading;
             reciterSelect.disabled = isLoading;
             translationLang.disabled = isLoading;
-            transFontSizeSelect.disabled = isLoading;
-            arabicFontSizeSelect.disabled = isLoading;
+            transFontSizeSlider.disabled = isLoading;
+            arabicFontSizeSlider.disabled = isLoading;
             showTranslationCheck.disabled = isLoading;
             showSurahNameCheck.disabled = isLoading;
             useFadeCheck.disabled = isLoading;
@@ -403,10 +400,10 @@
             ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
             ctx.shadowBlur = 10;
 
-            const userArabicSize = parseInt(arabicFontSizeSelect.value);
+            const userArabicSize = parseInt(arabicFontSizeSlider.value);
             const arabicFontSize = canvas.width < 1100 ? userArabicSize * 0.85 : userArabicSize;
             
-            const userTransFontSize = parseInt(transFontSizeSelect.value);
+            const userTransFontSize = parseInt(transFontSizeSlider.value);
             const transFontSize = canvas.width < 1100 ? userTransFontSize * 0.8 : userTransFontSize;
             
             const maxWidth = canvas.width * 0.85;
@@ -604,7 +601,6 @@
                 timestamps = [];
                 const audioBuffers = [];
                 let offset = 0;
-                // تداخل صوتي بسيط (0.1 ثانية) لضمان عدم وجود فجوات وسلاسة الربط
                 const overlapTime = 0.1;
 
                 for (let i = start; i <= end; i++) {
@@ -687,7 +683,6 @@
                 if (!mediaRecorder || mediaRecorder.state !== "recording") return;
                 const ct = audioElement.currentTime;
                 
-                // البحث عن الآية الحالية مع تقديم بسيط 0.05 لضمان تغيير النص مع الصوت تماماً
                 const active = timestamps.find(t => ct >= (t.start - 0.05) && ct < (t.end - 0.05));
                 
                 if (active) {
@@ -725,7 +720,6 @@
                     const bData = b.getChannelData(c);
                     for(let j=0; j<bData.length; j++) {
                         if(ov > 0 && i > 0 && j < ov) {
-                            // تطبيق خلط (Crossfade) ناعم في منطقة التداخل
                             const w = j / ov;
                             data[cur - ov + j] = (data[cur - ov + j] * (1-w)) + (bData[j] * w);
                         } else {
